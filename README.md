@@ -10,7 +10,7 @@ The results of the model have been quantified for it to make sense for real busi
 - Cost incurred by financial institution if the bad applicant gets classified as good applicant = 500 DM
 
 The best performing model based on the above measures is then deployed using RShiny as an interactive application.
-[Please find the full report here](https://github.com/ishudewan/Credit-Risk-Analysis/blob/master/Credit%20Risk%20Analysis%20and%20Predictive%20Modeling%20Report.pdf)
+[Please find the full report here.](https://github.com/ishudewan/Credit-Risk-Analysis/blob/master/Credit%20Risk%20Analysis%20and%20Predictive%20Modeling%20Report.pdf)
 
 ## Credit Risk Application using RShiny
 ![alt text](https://github.com/ishudewan/Credit-Risk-Analysis/blob/master/Credit%20Risk%20Application.JPG)
