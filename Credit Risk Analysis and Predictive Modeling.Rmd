@@ -1,0 +1,214 @@
+
+```{r}
+# Libraries Used
+
+library(tidyr)
+library(psych)
+library(rpart)
+library(rpart.plot)
+library(dplyr)
+library(randomForest)
+library(caret)
+library(caTools)
+library(ROCR)
+library(ada)
+library(knitr)
+library("readxl")
+library('caret')
+library(corrplot)
+
+```
+
+```{r}
+# Reading in the data
+dataset <- read_excel('GermanCredit_assgt_S18.xls', sheet = 1)
+```
+
+```{r}
+# overview of the data
+str(dataset)
+```
+
+```{r}
+summary(dataset)
+```
+
+```{r}
+# Identifying columns with missing values
+
+colnames(dataset)[colSums(is.na(dataset))>0]
+
+# Imputing mean value for age for missing values
+
+dataset$AGE[is.na(dataset$AGE)] <- round(mean(dataset$AGE, na.rm = TRUE), digits = 2)
+
+# Replacing all other missing values with 0
+
+dataset[is.na(dataset)] <- 0
+
+# Dropping the OBS# column
+
+dataset <- dataset[,-1]
+
+#Fixing Column names
+
+colnames(dataset)[7] <- "RADIO_TV"
+colnames(dataset)[17] <- "CO_APPLICANT"
+
+colnames(dataset)
+```
+
+```{r}
+# Converting data type of multiple columns to factor
+
+cat_cols <- c("CHK_ACCT", "HISTORY", "SAV_ACCT", "EMPLOYMENT", "NEW_CAR", "USED_CAR", "FURNITURE", "RADIO_TV", "EDUCATION", "RETRAINING", "MALE_DIV", "MALE_SINGLE", "MALE_MAR_or_WID", "CO_APPLICANT", "GUARANTOR", "PRESENT_RESIDENT", "REAL_ESTATE", "PROP_UNKN_NONE", "OTHER_INSTALL", "RENT", "OWN_RES", "JOB", "TELEPHONE", "FOREIGN", "RESPONSE")
+
+
+#Created correlation plot before converting the response to categorical (Part of EDA)
+
+corrplot(cor(dataset[,c("RESPONSE", "DURATION", "AMOUNT", "INSTALL_RATE", "AGE", "NUM_CREDITS", "NUM_DEPENDENTS")]), method = "number", col = 'black')
+
+
+dataset[cat_cols] <- lapply(dataset[cat_cols], factor)
+```
+
+```{r}
+
+### Exploratory Data Analysis
+
+# Proportion of cases
+
+table <- table(dataset$RESPONSE)
+proptable <- prop.table(table)
+proptable 
+
+# Description of continuous variables
+
+cont_cols <- c("DURATION", "AMOUNT", "INSTALL_RATE", "AGE", "NUM_CREDITS", "NUM_DEPENDENTS")
+
+lapply(dataset[cont_cols], describe)
+
+
+# Frequency counts for categorical variables
+
+lapply(dataset[cat_cols],function(x) xtabs(~x,dataset))
+
+
+```
+
+```{r}
+# Performing Stratified sampling 
+
+set.seed(1234)
+
+inTrain <- createDataPartition(y = dataset[["RESPONSE"]], p=0.7, list = F )
+
+dataset_train <- dataset[inTrain,]
+dataset_test <- dataset[-inTrain,]
+```
+
+```{r}
+## Decision tree model
+
+# Creating the model
+dt_mod <- rpart(RESPONSE~.,dataset_train,method = "class", control = rpart.control(minsplit = 20, minbucket = 7, cp = 0.01, xval =10, parms = list(split = 'infomation')))
+
+printcp(dt_mod)
+```
+
+```{r}
+# Making the prediction with Decision tree model
+
+dt_pred <- predict(dt_mod,dataset_test[,c(1:(ncol(dataset_test)-1))],type = "class")
+
+confusionMatrix(dt_pred,dataset_test$RESPONSE)
+```
+
+```{r}
+# Creating ROC for Decision Tree
+
+dt_pred_prob <- predict(dt_mod,dataset_test[,c(1:(ncol(dataset_test)-1))])[,2]
+
+roc_dt_pred <- prediction(dt_pred_prob,dataset_test$RESPONSE)
+
+roc_dt_perf <- performance(roc_dt_pred, "tpr", "fpr")
+
+plot(roc_dt_perf,colorize = F, lwd = 3)
+abline(0,1)
+dt_auc <- performance(roc_dt_pred, measure = "auc")
+cat(paste("The area under curve (AUC) for this model is ", round(dt_auc@y.values[[1]], 3)))
+```
+
+```{r}
+## ADABoost Model
+set.seed(1234)
+
+# Model paramenters
+ada_mod <- ada(RESPONSE~., dataset_train)
+
+summary(ada_mod)
+
+#Making a prediction
+ada_pred <- predict(ada_mod,dataset_test[,c(1:(ncol(dataset_test)-1))])
+
+confusionMatrix(ada_pred,dataset_test$RESPONSE)
+```
+
+```{r}
+# Creating ROC for Adaboost 
+
+ada_pred_prob <- predict(ada_mod,dataset_test[,c(1:(ncol(dataset_test)-1))], type = 'prob')[,2]
+
+roc_ada_pred <- prediction(ada_pred_prob,dataset_test$RESPONSE)
+
+roc_ada_perf <- performance(roc_ada_pred, "tpr", "fpr")
+
+plot(roc_ada_perf,colorize = F, lwd = 3)
+abline(0,1)
+ada_auc <- performance(roc_ada_pred, measure = "auc")
+cat(paste("The area under curve (AUC) for this model is ", round(ada_auc@y.values[[1]], 3)))
+```
+
+```{r}
+## Creating Random forest model
+set.seed(1234)
+
+# Creating the model
+rf_mod <- randomForest(RESPONSE ~., dataset_train, ntree= 700, importance = T)
+
+rf_mod
+
+rf_pred <- predict(rf_mod,dataset_test[,c(1:(ncol(dataset_test)-1))])
+
+confusionMatrix(rf_pred,dataset_test$RESPONSE)
+
+```
+
+```{r}
+# Creating ROC for Random Forest 
+
+rf_pred_prob <- predict(rf_mod,dataset_test[,c(1:(ncol(dataset_test)-1))], type = 'prob')[,2]
+
+roc_rf_pred <- prediction(rf_pred_prob,dataset_test$RESPONSE)
+
+roc_rf_perf <- performance(roc_rf_pred, "tpr", "fpr")
+
+plot(roc_rf_perf,colorize = F, lwd = 3)
+abline(0,1)
+rf_auc <- performance(roc_rf_pred, measure = "auc")
+cat(paste("The area under curve (AUC) for this model is ", round(rf_auc@y.values[[1]], 3)))
+
+# Variable importance plot
+varImpPlot(rf_mod)
+
+
+# Cutoff threshold
+acc.perf = performance(roc_rf_pred, measure = "acc")
+plot(acc.perf)
+
+
+```
+
+
+
+
